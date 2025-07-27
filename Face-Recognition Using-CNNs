@@ -1,0 +1,237 @@
+import os
+import shutil
+import cv2
+import albumentations as A
+import numpy as np
+import matplotlib.pyplot as plt
+from keras import Sequential
+from keras.src.layers import Conv2D, MaxPooling2D, BatchNormalization, Dropout, Dense, Flatten
+from keras_preprocessing.image import ImageDataGenerator
+from tensorflow.keras.preprocessing import image
+from tkinter import Tk, filedialog
+import unicodedata
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
+from tensorflow.keras.applications import MobileNetV3Small
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
+from tensorflow.keras.applications.mobilenet_v3 import preprocess_input
+
+
+print(
+ "1. Input new employee image for training\n"
+ "2. Train CNN model and make predictions\n"
+ "3. Delete Employee Image Folder\n"
+ "4. Delete Employee Image Folder (delete only images)\n"
+ "5. Create a new folder for the company"
+)
+x = int(input("Please choose a menu: "))
+if x == 1:
+ # --- Configuration ---
+ destination_root = r"C:\Users\Administrator\PyCharmMiscProject\Original Images"
+ os.makedirs(destination_root, exist_ok=True)
+
+ # Open file dialog to select an image
+ root = Tk()
+ root.withdraw()
+ file_path = filedialog.askopenfilename(
+     title="Select Image",
+     filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")]
+ )
+
+ # Check if no image was selected
+ if not file_path:
+     print("No image was selected.")
+     exit()
+
+ # Get the original file name
+ file_name = os.path.basename(file_path)
+ name, ext = os.path.splitext(file_name)
+
+ # Remove accents, remove spaces, convert to lowercase
+ name_no_accent = ''.join(
+     c for c in unicodedata.normalize('NFKD', name) if not unicodedata.combining(c)
+ )
+ clean_name = name_no_accent.replace(" ", "").lower()
+ clean_file_name = clean_name + ext.lower()
+
+ # Create a folder based on the cleaned-up image name
+ target_folder = os.path.join(destination_root, clean_name)
+ os.makedirs(target_folder, exist_ok=True)
+
+ # Copy the image to the new folder with the cleaned-up file name
+ target_path = os.path.join(target_folder, clean_file_name)
+ shutil.copy(file_path, target_path)
+ print(f"Image '{file_name}' has been saved to: {target_folder} with new name: '{clean_file_name}'")
+
+ # Log the file name to a text file
+ log_file = os.path.join(target_folder, "saved_filenames.txt")
+ with open(log_file, "a", encoding="utf-8") as f:
+     f.write(file_name + "\n")
+
+ # Read and display the image
+ image_cv = cv2.imread(target_path)
+ if image_cv is None:
+     print(f"Unable to read the image from: {target_path}")
+     exit()
+
+ # --- List of augmentations ---
+ augmentations = {
+     'rotate_30': A.Rotate(limit=30, p=1),
+     'rotate_60': A.Rotate(limit=60, p=1),
+     'rotate_90': A.Rotate(limit=90, p=1),
+     'rotate_120': A.Rotate(limit=120, p=1),
+     'rotate_150': A.Rotate(limit=120, p=1),
+     'rotate_180': A.Rotate(limit=120, p=1),
+     'flip_horizontal': A.HorizontalFlip(p=1),
+     'flip_vertical': A.VerticalFlip(p=1),
+     'random_crop': A.RandomCrop(height=200, width=200, p=1),
+     'random_brightness': A.RandomBrightnessContrast(p=1),
+     'blur': A.Blur(blur_limit=50, p=1),
+     'GaussianBlur': A.GaussianBlur(blur_limit=(3,7), p=1),
+     'MedianBlur': A.MedianBlur(blur_limit=(3,7), p=1),
+     'MotionBlur': A.MotionBlur(blur_limit=(3,7), p=1),
+     'contrast1': A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1.0),
+     'Hue': A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=1.0),
+     'channel Shuffle': A.ChannelShuffle(p=1),
+     'Histogram Equalization': A.CLAHE(clip_limit=4.0, tile_grid_size=(8,8), p=1.0),
+     'Posterize': A.Posterize(num_bits=4, p=1.0),
+     'shift_scale_rotate': A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=20, p=1),
+     'elastic_transform': A.ElasticTransform(p=1),
+     'grid_distortion': A.GridDistortion(p=1),
+     'Affine Transform': A.Affine(scale=(0.9, 1.1), translate_percent=(0.1, 0.1), rotate=(-20, 20), shear=(-10, 10), p=1.0),
+     'Perspective Transform': A.Perspective(scale=(0.05, 0.1), p=1.0),
+ }
+
+ for name, aug in augmentations.items():
+     augmented = aug(image=cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+     aug_image = augmented['image']
+     aug_image_bgr = cv2.cvtColor(aug_image, cv2.COLOR_RGB2BGR)
+     output_path = os.path.join(target_folder, f"{name}.jpg")
+     cv2.imwrite(output_path, aug_image_bgr)
+     print(f"Saved: {output_path}")
+
+elif x == 2:
+   train_dir = r'C:\Users\Administrator\PyCharmMiscProject\Original Images'
+   generator = ImageDataGenerator()
+   train_ds = generator.flow_from_directory(train_dir, target_size=(224, 224), batch_size=32)
+   classes = list(train_ds.class_indices.keys())
+
+   # Train model
+   model = Sequential()
+   model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(224, 224, 3)))
+   model.add(MaxPooling2D(pool_size=(2, 2)))
+   model.add(BatchNormalization())
+   model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
+   model.add(MaxPooling2D(pool_size=(2, 2)))
+   model.add(BatchNormalization())
+   model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
+   model.add(MaxPooling2D(pool_size=(2, 2)))
+   model.add(BatchNormalization())
+   model.add(Conv2D(96, kernel_size=(3, 3), activation='relu'))
+   model.add(MaxPooling2D(pool_size=(2, 2)))
+   model.add(BatchNormalization())
+   model.add(Conv2D(32, kernel_size=(3, 3), activation='relu'))
+   model.add(MaxPooling2D(pool_size=(2, 2)))
+   model.add(BatchNormalization())
+   model.add(Dropout(0.2))
+   model.add(Flatten())
+   model.add(Dense(128, activation='relu'))
+   model.add(Dense(len(classes), activation='softmax'))
+
+   model.compile(
+       loss='categorical_crossentropy',
+       optimizer='adam',
+       metrics=["accuracy"]
+   )
+   history = model.fit(train_ds, epochs=20, batch_size=32)
+
+   def predict_image(image_path, threshold=0.95):
+       # Load and display the image
+       img = image.load_img(image_path, target_size=(224, 224))
+       plt.imshow(img)
+       plt.axis('off')
+       plt.show()
+
+       # Prepare the image
+       x = image.img_to_array(img)
+       x = np.expand_dims(x, axis=0)
+       images = np.vstack([x])
+
+       # Make prediction
+       pred = model.predict(images, batch_size=32)[0]  # get 1D vector
+       predicted_prob = np.max(pred)
+       predicted_class_index = np.argmax(pred)
+       predicted_class = classes[predicted_class_index]
+
+       # Show probabilities for each class
+       print("\n Prediction Probabilities:")
+       for i, cls in enumerate(classes):
+           print(f"- {cls}: {pred[i] * 100:.2f}%")
+
+       # If under threshold
+       if predicted_prob < threshold:
+           print(f"\n Prediction not confident (probability: {predicted_prob:.2f})")
+           print("The image may not belong to any class.")
+           return
+
+       # If confident → show folder name (class name)
+       print(f"\n The image is predicted to belong to class: {predicted_class} (probability: {predicted_prob:.2f})")
+       print(f"User: {predicted_class}")
+
+   predict_image("C:\\Users\\Administrator\\PyCharmMiscProject\\Capture.PNG", threshold=0.65)
+
+elif x == 3:
+   user_to_delete = input("Enter the username to delete (delete the entire folder): ")
+   file_path = os.path.join(r"C:\Users\Administrator\PycharmProjects\PythonProject\profile_pictures", user_to_delete)
+   if os.path.exists(file_path):
+       try:
+           shutil.rmtree(file_path)
+           print(f" Deleted entire folder: {file_path}")
+       except Exception as e:
+           print(f"Error deleting the folder: {e}")
+   else:
+       print(f"Folder does not exist: {file_path}")
+
+
+elif x == 4:
+   user_to_delete = input("Enter the username to delete (delete only images): ")
+   file_path = os.path.join(r"C:\Users\Administrator\PycharmProjects\PythonProject\profile_pictures", user_to_delete)
+   image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp')
+   deleted_count = 0
+   for filename in os.listdir(file_path):
+       if filename.lower().endswith(image_extensions):
+           file_path1 = os.path.join(file_path, filename)
+           try:
+               os.remove(file_path1)
+               print(f" Deleted: {filename}")
+               deleted_count += 1
+           except Exception as e:
+               print(f" Error deleting {filename}: {e}")
+   print(f"\n Deleted {deleted_count} images in the folder: {file_path}")
+
+elif x == 5:
+   x = input("Enter Folder Name: ")
+   folder_path = "C:\\Users\\Administrator\\PycharmProjects\\PythonProject\\" + x
+   os.makedirs(folder_path, exist_ok=True)
+   print(f" Created (or already exists) the folder: {folder_path}")
+else:
+   print("Invalid choice.")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
