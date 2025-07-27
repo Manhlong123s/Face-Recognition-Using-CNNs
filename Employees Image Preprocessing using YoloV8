@@ -1,0 +1,330 @@
+import shutil
+from ultralytics import YOLO
+import matplotlib.pyplot as plt
+import cv2
+import numpy as np
+import os
+
+# 3. Upload image from the computer
+x = int(input("Do you want to upload a folder or an image file?\n"
+             "1. File\n"
+             "2. Folder\n"))
+
+# 4. Load the YOLOv8 model
+if x == 1:
+    x = input("Enter the image file: ")
+    img_path = "C:\\Users\\Administrator\\PyCharmMiscProject\\" + x
+    model = YOLO('yolov8n.pt')
+    results = model(img_path)
+    
+    # 6. Read the original image
+    img = cv2.imread(img_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    height, width = img.shape[:2]
+
+    # 7. Get the predictions
+    pred = results[0].boxes
+    boxes = pred.xywh.cpu().numpy()
+    confidences = pred.conf.cpu().numpy()
+    labels = pred.cls.cpu().numpy()
+
+    # 8. Find the best detection (priority to person)
+    best_idx = -1
+    max_conf = -1
+    person_class_id = 0  # In COCO, the "person" class has id = 0
+
+    for i, (conf, label) in enumerate(zip(confidences, labels)):
+        if int(label) == person_class_id:
+            if conf > max_conf:
+                max_conf = conf
+                best_idx = i
+
+    # If no person, take the highest confidence detection
+    if best_idx == -1 and len(confidences) > 0:
+        best_idx = int(np.argmax(confidences))
+        max_conf = confidences[best_idx]
+
+    # 9. If at least 1 detection exists
+    label = int(labels[best_idx])
+    label_text = f'{model.names[label]}'
+    print(label_text)
+    
+    if label_text == 'person':
+        person_folder = "C:\\Users\\Administrator\\PyCharmMiscProject\\person"
+        os.makedirs(person_folder, exist_ok=True)
+        
+        if width < 400 and height < 500:
+            folder_3x4 = "C:\\Users\\Administrator\\PyCharmMiscProject\\person\\3x4"
+            os.makedirs(folder_3x4, exist_ok=True)
+            
+            if best_idx != -1:
+                x, y, w, h = boxes[best_idx]
+                x1, y1 = int(w - 3 / 4 * w), int(h - 9 / 10 * h)
+                x2, y2 = int(w - w / 5), int(h - h / 4)
+
+                # Draw the bounding box and label
+                label = int(labels[best_idx])
+                label_text = f'{model.names[label]} {max_conf:.2f}'
+                cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+                cv2.putText(img, label_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+                # Crop the region
+                crop = img[y1:y2, x1:x2]
+                filename = f"crop_{os.path.basename(img_path)}"
+                save_path = os.path.join(folder_3x4, filename)
+
+                # Save the cropped image to the folder
+                cv2.imwrite(save_path, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                print(f"✅ Cropped image saved to: {save_path}")
+
+                # Display the cropped region
+                if crop.size > 0:
+                    plt.figure(figsize=(5, 5))
+                    plt.imshow(crop)
+                    plt.axis('off')
+                    plt.title(f"🔍 Cropped region: {label_text}")
+                    plt.show()
+                else:
+                    print("⚠️ Failed to crop the image (empty crop).")
+            else:
+                print("⚠️ No object detected.")
+        
+        elif 400 < width < 500 and 600 < height < 700:
+            folder_4x6 = "C:\\Users\\Administrator\\PyCharmMiscProject\\person\\4x6"
+            os.makedirs(folder_4x6, exist_ok=True)
+            
+            if best_idx != -1:
+                x, y, w, h = boxes[best_idx]
+                x1, y1 = int(w - 5 / 6 * w), int(h - 9 / 10 * h)
+                x2, y2 = int(w - w / 6), int(h - h / 4)
+
+                # Draw the bounding box and label
+                label = int(labels[best_idx])
+                label_text = f'{model.names[label]} {max_conf:.2f}'
+                cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+                cv2.putText(img, label_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+                # Crop the region
+                crop = img[y1:y2, x1:x2]
+                filename = f"crop_{os.path.basename(img_path)}"
+                save_path = os.path.join(folder_4x6, filename)
+                cv2.imwrite(save_path, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                print(f"✅ Cropped image saved to: {save_path}")
+
+                # Display the cropped region
+                if crop.size > 0:
+                    plt.figure(figsize=(5, 5))
+                    plt.imshow(crop)
+                    plt.axis('off')
+                    plt.title(f"Size: {round(width / 100)} x {round(height / 100)}")
+                    plt.show()
+                else:
+                    print("⚠️ Failed to crop the image (empty crop).")
+            else:
+                print("⚠️ No object detected.")
+    
+    elif label_text == 'apple' or label_text == 'orange' or label_text == 'banana':
+        folder_fruit = "C:\\Users\\Administrator\\PyCharmMiscProject\\fruit"
+        os.makedirs(folder_fruit, exist_ok=True)
+        img_file = os.path.basename(img_path)
+        cropped_images = []
+        
+        for i, (box, conf, label) in enumerate(zip(boxes, confidences, labels)):
+            x, y, w, h = box
+            x1, y1 = int(x - w / 2), int(y - h / 2)
+            x2, y2 = int(x + w / 2), int(y + h / 2)
+
+            label_name = model.names[int(label)]
+
+            if label_name != "apple":
+                continue  # ❌ Skip if not "apple"
+
+            label_text = f'{label_name} {conf:.2f}'
+
+            # 📁 Create folder only for apple
+            apple_folder = os.path.join(folder_fruit, "apple")
+            os.makedirs(apple_folder, exist_ok=True)
+
+            # ✂️ Crop and save to fruit/apple/
+            crop = img[y1:y2, x1:x2]
+            filename_crop = f"{img_file}"
+            save_path_crop = os.path.join(apple_folder, filename_crop)
+            cv2.imwrite(save_path_crop, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+            print(f"✅ Cropped image saved to: {save_path_crop}")
+            
+            if crop.size > 0:
+                cropped_images.append((crop, label_text))
+
+        # 10. Display each cropped image from detected regions
+        if cropped_images:
+            # Auto adjust display: if many images, display vertically
+            if len(cropped_images) > 4:
+                rows, cols = len(cropped_images), 1
+                figsize = (6, 4 * len(cropped_images))
+            else:
+                rows, cols = 1, len(cropped_images)
+                figsize = (4 * len(cropped_images), 5)
+
+            plt.figure(figsize=figsize)
+            for idx, (crop_img, label_text) in enumerate(cropped_images):
+                plt.subplot(rows, cols, idx + 1)
+                plt.imshow(crop_img)
+                plt.axis('off')
+                plt.title(label_text)
+            plt.suptitle("🔍 Detected and cropped regions from the image", fontsize=16)
+            plt.show()
+        else:
+            print("⚠️ No regions detected for cropping.")
+elif x == 2:
+    x = input("Enter the folder name: ")
+    img_path = "C:\\Users\\Administrator\\PyCharmMiscProject\\" + x
+    image_files = [f for f in os.listdir(img_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+
+    model = YOLO('yolov8n.pt')
+
+    for img_file in image_files:
+        img_path2 = os.path.join(img_path, img_file)  # Correct: full path of the original image
+
+        results = model(img_path2)
+
+        img = cv2.imread(img_path2)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        height, width = img.shape[:2]
+
+        pred = results[0].boxes
+        boxes = pred.xywh.cpu().numpy()
+        confidences = pred.conf.cpu().numpy()
+        labels = pred.cls.cpu().numpy()
+
+        best_idx = -1
+        max_conf = -1
+        person_class_id = 0
+
+        for i, (conf, label) in enumerate(zip(confidences, labels)):
+            if int(label) == person_class_id:
+                if conf > max_conf:
+                    max_conf = conf
+                    best_idx = i
+
+        if best_idx == -1 and len(confidences) > 0:
+            best_idx = int(np.argmax(confidences))
+            max_conf = confidences[best_idx]
+
+        label = int(labels[best_idx])
+        label_text = f'{model.names[label]}'
+        print(f"File: {img_file} - Label: {label_text}")
+
+        if label_text == 'person':
+            person_folder = "C:\\Users\\Administrator\\PyCharmMiscProject\\person"
+            os.makedirs(person_folder, exist_ok=True)
+
+            if width < 400 and height < 500:
+                folder_3x4 = os.path.join(person_folder, "3x4")
+                os.makedirs(folder_3x4, exist_ok=True)
+
+                if best_idx != -1:
+                    x, y, w, h = boxes[best_idx]
+                    x1, y1 = int(w - 3 / 4 * w), int(h - 9 / 10 * h)
+                    x2, y2 = int(w - w / 5), int(h - h / 4)
+
+                    label = int(labels[best_idx])
+                    label_text = f'{model.names[label]} {max_conf:.2f}'
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+                    cv2.putText(img, label_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+                    crop = img[y1:y2, x1:x2]
+                    filename = f"crop_{img_file}"
+                    save_path = os.path.join(folder_3x4, filename)
+                    cv2.imwrite(save_path, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                    print(f"✅ Cropped image saved to: {save_path}")
+
+                    if crop.size > 0:
+                        plt.figure(figsize=(5, 5))
+                        plt.imshow(crop)
+                        plt.axis('off')
+                        plt.title(f" Cropped region: {label_text}")
+                        plt.show()
+                    else:
+                        print("⚠️ Failed to crop the image (empty crop).")
+                else:
+                    print("⚠️ No object detected.")
+            
+            elif 400 < width < 500 and 600 < height < 700:
+                folder_4x6 = os.path.join(person_folder, "4x6")
+                os.makedirs(folder_4x6, exist_ok=True)
+
+                if best_idx != -1:
+                    x, y, w, h = boxes[best_idx]
+                    x1, y1 = int(w - 5 / 6 * w), int(h - 9 / 10 * h)
+                    x2, y2 = int(w - w / 6), int(h - h / 4)
+
+                    label = int(labels[best_idx])
+                    label_text = f'{model.names[label]} {max_conf:.2f}'
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+                    cv2.putText(img, label_text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+                    crop = img[y1:y2, x1:x2]
+                    filename = f"crop_{img_file}"
+                    save_path = os.path.join(folder_4x6, filename)
+                    cv2.imwrite(save_path, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                    print(f"✅ Cropped image saved to: {save_path}")
+
+                    if crop.size > 0:
+                        plt.figure(figsize=(5, 5))
+                        plt.imshow(crop)
+                        plt.axis('off')
+                        plt.title(f"Size: {round(width / 100)} x {round(height / 100)}")
+                        plt.show()
+                    else:
+                        print("⚠️ Failed to crop the image (empty crop).")
+                else:
+                    print("⚠️ No object detected.")
+
+        elif label_text == 'apple' or label_text == 'orange' or label_text == 'banana':
+            folder_fruit = "C:\\Users\\Administrator\\PyCharmMiscProject\\fruit"
+            os.makedirs(folder_fruit, exist_ok=True)
+            cropped_images = []
+
+            for i, (box, conf, label) in enumerate(zip(boxes, confidences, labels)):
+                x, y, w, h = box
+                x1, y1 = int(x - w / 2), int(y - h / 2)
+                x2, y2 = int(x + w / 2), int(y + h / 2)
+
+                label_name = model.names[int(label)]
+
+                if label_name != "apple":
+                    continue  # ❌ Skip if not "apple"
+
+                label_text = f'{label_name} {conf:.2f}'
+
+                # 📁 Create folder only for apple
+                apple_folder = os.path.join(folder_fruit, "apple")
+                os.makedirs(apple_folder, exist_ok=True)
+
+                # ✂️ Crop and save to fruit/apple/
+                crop = img[y1:y2, x1:x2]
+                filename_crop = f"crop_{i}_{img_file}"
+                save_path_crop = os.path.join(apple_folder, filename_crop)
+                cv2.imwrite(save_path_crop, cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                print(f"✅ Cropped image saved to: {save_path_crop}")
+
+                if crop.size > 0:
+                    cropped_images.append((crop, label_text))
+
+            # Display cropped images (if any)
+            if cropped_images:
+                rows = len(cropped_images)
+                cols = 1 if rows > 4 else len(cropped_images)
+                figsize = (6, 4 * rows) if rows > 4 else (4 * cols, 5)
+                plt.figure(figsize=figsize)
+                for idx, (crop_img, label_text) in enumerate(cropped_images):
+                    plt.subplot(rows, cols, idx + 1)
+                    plt.imshow(crop_img)
+                    plt.axis('off')
+                    plt.title(label_text)
+                plt.suptitle("🔍 Detected and cropped regions from the image", fontsize=16)
+                plt.show()
+            else:
+                print("⚠️ No regions detected for cropping.")
+else:
+    print("Invalid option. Please enter 1 for file or 2 for folder.")
